@@ -1,0 +1,15 @@
+# 個人のデータ（問題画像・語呂・確認内容・報告）は公開しない
+data/
+export/
+
+# ビルド・依存関係
+node_modules/
+app/dist/
+importer/extract
+
+# その他
+.DS_Store
+*.log
+.claude/settings.local.json
+.claude/
+*.tsbuildinfo
