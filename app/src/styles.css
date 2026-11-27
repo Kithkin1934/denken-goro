@@ -231,3 +231,7 @@ button.danger { color: var(--ng); }
 .link-btn { border: none; background: none; padding: 6px 0; text-align: left; font: inherit; width: 100%; }
 .exam-review li { border-bottom: 1px solid var(--line); }
 .exam-goro { padding: 8px 0 12px; }
+
+.stats-section { margin-top: 24px; }
+.section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.section-head h2 { margin: 0; flex: 1; }

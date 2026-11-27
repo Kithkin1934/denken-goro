@@ -4,6 +4,7 @@ import { db, calcIds, studyStreak, exportBackup, importBackup, importPackage, ne
 import { SUBJECTS } from '../types';
 import { getNewPerDay, isDueNow, retrievability, setNewPerDay } from '../srs';
 import { go } from '../App';
+import { StatsSection } from './Stats';
 
 const isDevMac = import.meta.env.DEV && !/iPad|iPhone/.test(navigator.userAgent) && navigator.maxTouchPoints < 2;
 
@@ -120,7 +121,7 @@ export default function Home() {
       <header className="top">
         <h1>電験語呂</h1>
         {today && <span className="muted">今日 {today.n}問・正解 {today.ok}</span>}
-        {!!today?.streak.days && <button className="streak" onClick={() => go('/stats')}>🔥 {today.streak.days}日連続</button>}
+        {!!today?.streak.days && <button className="streak" onClick={() => document.getElementById('stats')?.scrollIntoView({ behavior: 'smooth' })}>🔥 {today.streak.days}日連続</button>}
       </header>
 
       {total === 0 && subjects && (
@@ -162,6 +163,8 @@ export default function Home() {
         ))}
       </section>
 
+      {total > 0 && <StatsSection />}
+
       <div className="panel settings">
         <div className="row">
           <span>1回の問題数</span>
@@ -185,7 +188,6 @@ export default function Home() {
       <div className="panel row">
         <button disabled={!total} onClick={() => go('/browse')}>問題一覧</button>
         <button disabled={!total} onClick={() => go('/exam')}>模擬試験{localStorage.getItem('mockExam') ? '（途中）' : ''}</button>
-        <button onClick={() => go('/stats')}>学習の記録</button>
         <button onClick={() => fileRef.current?.click()}>問題データを読み込む</button>
         <input ref={fileRef} type="file" accept=".zip,application/zip" multiple hidden onChange={(e) => onFiles(e.target.files)} />
         {import.meta.env.DEV && <button onClick={loadFromMac}>Mac から直接読み込む</button>}

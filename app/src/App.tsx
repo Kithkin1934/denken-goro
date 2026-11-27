@@ -3,7 +3,6 @@ import Home from './pages/Home';
 import Practice from './pages/Practice';
 import Browse from './pages/Browse';
 import Review from './pages/Review';
-import Stats from './pages/Stats';
 import Exam from './pages/Exam';
 
 /** #/ , #/practice?subject=理論&n=10(&kind=calc) , #/browse , #/card/<id> , #/review */
@@ -27,7 +26,6 @@ export default function App() {
   if (path === '/practice') return <Practice key={hash} subject={params.get('subject')} count={Number(params.get('n') ?? 20)} mode={params.get('mode') === 'extra' ? 'extra' : params.get('mode') === 'weak' ? 'weak' : 'today'} kind={params.get('kind') === 'calc' ? 'calc' : 'goro'} />;
   if (path.startsWith('/card/')) return <Practice key={hash} cardId={decodeURIComponent(path.slice(6))} />;
   if (path === '/browse') return <Browse />;
-  if (path === '/stats') return <Stats />;
   if (path === '/exam') return <Exam />;
   return <Home />;
 }
