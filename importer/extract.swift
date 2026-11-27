@@ -300,8 +300,9 @@ func findHeaders(_ pages: [PageData], multiYear: Bool, lastNumber: Int) -> (head
             if let m = headerRegex.firstMatch(in: t, range: NSRange(location: 0, length: ns.length)),
                let n = Int(ns.substring(with: m.range(at: 1))) {
                 cands.append(Header(page: pi, number: n, box: l.box, confident: true))
-            } else if t.range(of: "^\\s*[問間閥門閤]", options: .regularExpression) != nil {
+            } else if t.range(of: "^\\s*[問間閥門閤](?!\\s*[ぁ-んァ-ヶ一-龥])", options: .regularExpression) != nil {
                 // 番号が読めなかった見出しの候補（番号の流れから補う）
+                // 「問に答えよ」のような文の途中の行（問の後ろがかな・漢字）は見出しではない
                 cands.append(Header(page: pi, number: -1, box: l.box, confident: false))
             }
         }
