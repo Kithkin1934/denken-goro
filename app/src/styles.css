@@ -113,7 +113,7 @@ pre { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8p
 @media (orientation: landscape) and (min-width: 1000px) {
   .practice { max-width: 1280px; display: grid; grid-template-columns: 1fr 360px; grid-template-areas: "top top" "img ans" "rev rev"; column-gap: 20px; }
   .practice .top { grid-area: top; }
-  .practice > .images { grid-area: img; }
+  .practice > .images, .practice > .ink { grid-area: img; }
   .practice .answer-area { grid-area: ans; position: sticky; top: 16px; align-self: start; background: none; }
   .practice .choices { grid-template-columns: 1fr; }
   .practice .reveal { grid-area: rev; }
@@ -163,3 +163,9 @@ pre { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8p
 .subject-btns { display: flex; gap: 8px; }
 .subject-btns > button { flex: 1; }
 .qcell { position: relative; }
+
+/* 問題の画像への書き込み（消去法） */
+.ink-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ink-bar .muted { flex: 1; }
+.ink-wrap { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.ink-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: pan-x pan-y pinch-zoom; cursor: crosshair; }

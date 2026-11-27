@@ -6,6 +6,7 @@ import type { Card } from '../types';
 import { go } from '../App';
 import { CardImages, cardTitle } from '../components/CardImages';
 import { ReportDialog } from '../components/ReportDialog';
+import { InkLayer } from '../components/InkLayer';
 
 interface Props { subject?: string | null; count?: number; cardId?: string; mode?: 'today' | 'extra'; kind?: Kind }
 interface Result { card: Card; chosen: number; correct: boolean }
@@ -137,13 +138,16 @@ export default function Practice({ subject = null, count = 20, cardId, mode = 't
         <span className="title">{cardTitle(card)}</span>
         {isCalc && <span className="calc-badge">計算</span>}
         <span className="muted">{idx + 1} / {queue.length}</span>
-        <button className="ghost small-btn" onClick={toggleCalc}>{isCalc ? '語呂へ戻す' : '計算へ移す'}</button>
+        <button className="small-btn" onClick={toggleCalc}>{isCalc ? '語呂へ戻す' : '計算へ移す'}</button>
         <button className="report-btn" onClick={() => setReporting(true)}>⚑ 報告</button>
       </header>
       {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
       {reporting && <ReportDialog card={card} onClose={(m) => { setReporting(false); if (m) flash(m); }} />}
 
-      <CardImages card={card} kind="q" />
+      {/* 消去法の線を書き込める。問題が変わると（同じ問題の出し直しでも）白紙に戻る */}
+      <InkLayer key={idx}>
+        <CardImages card={card} kind="q" />
+      </InkLayer>
 
       <div className="answer-area">
         {card.sub && <div className="sub-hint">({card.sub}) の答えを選んでください</div>}
