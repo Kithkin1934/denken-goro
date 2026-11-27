@@ -22,7 +22,7 @@ export default function App() {
   const [path, query] = hash.split('?');
   const params = new URLSearchParams(query);
   if (path === '/review') return <Review />;
-  if (path === '/practice') return <Practice key={hash} subject={params.get('subject')} count={Number(params.get('n') ?? 20)} mode={params.get('mode') === 'extra' ? 'extra' : 'today'} kind={params.get('kind') === 'calc' ? 'calc' : 'goro'} />;
+  if (path === '/practice') return <Practice key={hash} subject={params.get('subject')} count={Number(params.get('n') ?? 20)} mode={params.get('mode') === 'extra' ? 'extra' : params.get('mode') === 'weak' ? 'weak' : 'today'} kind={params.get('kind') === 'calc' ? 'calc' : 'goro'} />;
   if (path.startsWith('/card/')) return <Practice key={hash} cardId={decodeURIComponent(path.slice(6))} />;
   if (path === '/browse') return <Browse />;
   return <Home />;

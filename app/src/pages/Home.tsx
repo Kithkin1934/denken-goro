@@ -150,6 +150,7 @@ export default function Home() {
                 : <button onClick={() => go(`/practice?subject=${s.subject}&n=${count}&mode=extra`)}>
                     今日の分は終わり 🎉　もっと解く
                   </button>}
+              <button disabled={!s.tried} onClick={() => go(`/practice?subject=${s.subject}&n=${count}&mode=weak`)}>苦手集中</button>
               {s.calcTotal > 0 && (
                 <button onClick={() => go(`/practice?subject=${s.subject}&n=${count}&kind=calc${s.calcDue ? '' : '&mode=extra'}`)}>
                   計算問題 {s.calcDue}<small>/{s.calcTotal}</small>

@@ -150,9 +150,12 @@ export function newStartedToday(stats: CardStat[], calc: Set<string>, subject: s
  * 出題する問題を選ぶ
  * - today: 今日が期限の問題（思い出せる確率が低い順）＋ 新しい問題（1日の上限まで）
  * - kind: goro は語呂の問題だけ、calc は計算問題に移した問題だけ
+ * - weak: 苦手集中。解いたことのある問題を、正答率が低い順（同じなら思い出せる確率が低い順）に
  * - extra: 今日の分が終わったあとの追加。新しい問題と、思い出せる確率が低い問題から
  */
-export async function buildQueue(subject: string | null, max: number, mode: 'today' | 'extra', kind: Kind = 'goro'): Promise<Card[]> {
+export type QueueMode = 'today' | 'extra' | 'weak';
+
+export async function buildQueue(subject: string | null, max: number, mode: QueueMode, kind: Kind = 'goro'): Promise<Card[]> {
   const calc = await calcIds();
   const all = subject ? await db.cards.where({ subject }).toArray() : await db.cards.toArray();
   const cards = all.filter((c) => calc.has(c.id) === (kind === 'calc'));
@@ -173,6 +176,13 @@ export async function buildQueue(subject: string | null, max: number, mode: 'tod
       : 0;
     const take = due.slice(0, max);
     return [...take, ...fresh.slice(0, Math.min(newLeft, max - take.length))];
+  }
+  if (mode === 'weak') {
+    const rate = (id: string) => { const st = stats.get(id)!; return st.attempts ? st.corrects / st.attempts : 1; };
+    return seen
+      .filter((x) => rate(x.c.id) < 1 || x.r < 0.9)
+      .sort((a, b) => rate(a.c.id) - rate(b.c.id) || a.r - b.r)
+      .slice(0, max).map((x) => x.c);
   }
   // extra: 新しい問題と、忘れかけている問題を交互に
   const weak = seen.filter((x) => x.s.due > end).sort((a, b) => a.r - b.r).map((x) => x.c);
@@ -257,4 +267,20 @@ export async function importBackup(file: File) {
     await db.tags.bulkPut((data.tags ?? []).filter((t) => (tags.get(t.cardId)?.at ?? -1) < t.at));
   });
   return { added, stats: data.stats.length };
+}
+
+/**
+ * (a)(b) のある問題は、同じ問題の小問をまとめて1組にする（同じ画面で続けて答える）
+ * 並び順は最初に出てきた小問の位置。小問は (a)→(b) の順
+ */
+export async function groupCards(cards: Card[]): Promise<Card[][]> {
+  const groups: Card[][] = [];
+  const done = new Set<string>();
+  for (const c of cards) {
+    if (done.has(c.questionId)) continue;
+    done.add(c.questionId);
+    const sibs = c.sub ? await db.cards.where({ questionId: c.questionId }).toArray() : [c];
+    groups.push(sibs.sort((a, b) => (a.sub ?? '').localeCompare(b.sub ?? '')));
+  }
+  return groups;
 }

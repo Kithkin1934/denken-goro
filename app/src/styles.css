@@ -115,7 +115,8 @@ pre { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8p
   .practice .top { grid-area: top; }
   .practice > .images, .practice > .ink { grid-area: img; }
   .practice .answer-area { grid-area: ans; position: sticky; top: 16px; align-self: start; background: none; }
-  .practice .choices { grid-template-columns: 1fr; }
+  .practice .choices:not(.multi) { grid-template-columns: 1fr; }
+  .practice .choices.multi .choice { min-height: 52px; font-size: 18px; }
   .practice .reveal { grid-area: rev; }
 }
 
@@ -169,3 +170,11 @@ pre { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8p
 .ink-bar .muted { flex: 1; }
 .ink-wrap { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ink-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: pan-x pan-y pinch-zoom; cursor: crosshair; }
+
+/* (a)(b) をまとめて答える */
+.sub-row + .sub-row { margin-top: 14px; }
+.choices.multi { gap: 6px; }
+.choice.picked { background: var(--accent, #4f5bd5); color: #fff; border-color: var(--accent, #4f5bd5); }
+.check-btn { width: 100%; margin-top: 14px; min-height: 52px; }
+.sub-verdict { display: inline-block; margin: 0 10px; }
+.weak-badge { background: #fde8e8; color: var(--ng); }
