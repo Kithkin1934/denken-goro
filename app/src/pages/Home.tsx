@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, calcIds, studyStreak, exportBackup, importBackup, importPackage, newStartedToday, sendReports } from '../db';
 import { SUBJECTS } from '../types';
-import { getNewPerDay, isDueNow, retrievability, setNewPerDay } from '../srs';
+import { daysUntil, getExamDates, getNewPerDay, isDueNow, retrievability, setExamDate, setNewPerDay } from '../srs';
 import { go } from '../App';
 import { StatsSection } from './Stats';
 
@@ -14,6 +14,7 @@ export default function Home() {
   const [msg, setMsg] = useState<string | null>(null);
   const [count, setCount] = useState(20);
   const [newPerDay, setNpd] = useState(getNewPerDay());
+  const [examDates, setExamDates] = useState(getExamDates());
 
   const summary = useLiveQuery(async () => {
     const cards = await db.cards.toArray();
@@ -135,6 +136,7 @@ export default function Home() {
           <div key={s.subject} className="panel subject">
             <div className="subject-head">
               <h2>{s.subject}</h2>
+              <Countdown date={examDates[s.subject]} />
               <span className="muted">{s.exams}回分・{s.total}問</span>
             </div>
             <div className="subject-stats">
@@ -182,6 +184,16 @@ export default function Home() {
             ))}
           </div>
         </div>
+        <div className="row">
+          <span>受験日（CBT）</span>
+          <div className="exam-dates">
+            {SUBJECTS.map((sub) => (
+              <label key={sub}>{sub}
+                <input type="date" value={examDates[sub] ?? ''} onChange={(e) => { setExamDate(sub, e.target.value); setExamDates(getExamDates()); }} />
+              </label>
+            ))}
+          </div>
+        </div>
         <p className="muted small">忘れかけた頃（思い出せる確率が約90%まで下がった頃）に、もう一度出題します。</p>
       </div>
 
@@ -207,5 +219,17 @@ export default function Home() {
       )}
       {msg && <p className="msg">{msg}</p>}
     </div>
+  );
+}
+
+/** 受験日までの残り日数 */
+function Countdown({ date }: { date?: string }) {
+  const d = daysUntil(date);
+  if (d == null || d < 0) return null;
+  const [, m, day] = date!.split('-').map(Number);
+  return (
+    <span className={`countdown${d <= 14 ? ' soon' : ''}`}>
+      {d === 0 ? '今日が試験日' : <>試験まで <b>{d}</b>日</>}<small>（{m}/{day}）</small>
+    </span>
   );
 }

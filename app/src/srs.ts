@@ -119,3 +119,20 @@ export function examSortKeyOf(exam: string): number {
   const year = (m[1] === 'H' ? 1988 : 2018) + Number(m[2]);
   return year * 10 + (exam.includes('下期') ? 2 : exam.includes('上期') ? 1 : 0);
 }
+
+// ---- 受験日（CBT）。科目ごとに設定でき、残り日数を出す ----
+const EXAM_DATES_KEY = 'examDates';
+const DEFAULT_EXAM_DATES: Record<string, string> = { 理論: '2027-02-13', 機械: '2027-02-20', 法規: '2027-02-27' };
+export function getExamDates(): Record<string, string> {
+  try { return { ...DEFAULT_EXAM_DATES, ...JSON.parse(localStorage.getItem(EXAM_DATES_KEY) ?? '{}') }; } catch { return { ...DEFAULT_EXAM_DATES }; }
+}
+export function setExamDate(subject: string, date: string) {
+  localStorage.setItem(EXAM_DATES_KEY, JSON.stringify({ ...getExamDates(), [subject]: date }));
+}
+/** 受験日まであと何日か（今日が試験日なら 0、過ぎていれば負、未設定なら null） */
+export function daysUntil(date: string | undefined, now = Date.now()): number | null {
+  if (!date) return null;
+  const [y, m, d] = date.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return Math.round((new Date(y, m - 1, d).getTime() - startOfToday(now)) / 86400000);
+}
