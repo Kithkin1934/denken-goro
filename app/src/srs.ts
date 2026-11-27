@@ -83,6 +83,13 @@ export function retrievability(s: SrsState | undefined, now = Date.now()): numbe
 
 export const isLearning = (s?: SrsState) => !!s && (s.state === State.Learning || s.state === State.Relearning);
 
+/**
+ * 今出す問題か
+ * - 解き直し中（間違えた直後など、数分〜数十分後に出す問題）は、その時刻が来てから
+ * - それ以外は、今日が期限なら
+ */
+export const isDueNow = (s: SrsState, now = Date.now()) => s.due <= (isLearning(s) ? now : endOfToday(now));
+
 export function endOfToday(now = Date.now()) {
   const d = new Date(now); d.setHours(23, 59, 59, 999); return d.getTime();
 }

@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, calcIds, exportBackup, importBackup, importPackage, sendReports } from '../db';
+import { db, calcIds, exportBackup, importBackup, importPackage, newStartedToday, sendReports } from '../db';
 import { SUBJECTS } from '../types';
-import { endOfToday, getNewPerDay, retrievability, setNewPerDay, startOfToday } from '../srs';
+import { getNewPerDay, isDueNow, retrievability, setNewPerDay } from '../srs';
 import { go } from '../App';
 
 const isDevMac = import.meta.env.DEV && !/iPad|iPhone/.test(navigator.userAgent) && navigator.maxTouchPoints < 2;
@@ -19,31 +19,28 @@ export default function Home() {
     const statList = await db.stats.toArray();
     const stats = new Map(statList.map((s) => [s.cardId, s]));
     const calc = await calcIds();
-    const now = Date.now(), end = endOfToday();
-    const startedToday = statList.filter((s) => (s.firstAt ?? 0) >= startOfToday() && !calc.has(s.cardId)).length;
-    const newLeftAll = Math.max(0, newPerDay - startedToday);
-    let freshAll = 0;
+    const now = Date.now();
     const subjects = SUBJECTS.map((subject) => {
       const cs = cards.filter((c) => c.subject === subject);
       let tried = 0, attempts = 0, corrects = 0, due = 0, fresh = 0, rSum = 0, calcTotal = 0, calcDue = 0;
       for (const c of cs) {
         const s = stats.get(c.id);
         const isCalc = calc.has(c.id);
-        if (isCalc) { calcTotal++; if (!s?.srs || s.srs.due <= end) calcDue++; }
-        if (!s?.srs) { if (!isCalc) { fresh++; freshAll++; } continue; }
+        if (isCalc) { calcTotal++; if (!s?.srs || isDueNow(s.srs, now)) calcDue++; }
+        if (!s?.srs) { if (!isCalc) fresh++; continue; }
         tried++; attempts += s.attempts; corrects += s.corrects;
-        if (s.srs.due <= end && !isCalc) due++;
+        if (isDueNow(s.srs, now) && !isCalc) due++;
         rSum += retrievability(s.srs, now);
       }
       return {
         subject, total: cs.length, exams: new Set(cs.map((c) => c.exam)).size, tried, due,
-        newToday: Math.min(fresh, newLeftAll),
+        newToday: Math.min(fresh, Math.max(0, newPerDay - newStartedToday(statList, calc, subject))),
         calcTotal, calcDue,   // 計算問題（語呂の復習とは別枠）
         rate: attempts ? corrects / attempts : null,
         retention: tried ? rSum / tried : null,   // 解いたことのある問題の、今の平均の思い出せる確率
       };
     });
-    return { subjects, newAll: Math.min(freshAll, newLeftAll) };
+    return { subjects };
   }, [newPerDay]);
 
   const today = useLiveQuery(async () => {
@@ -116,8 +113,6 @@ export default function Home() {
 
   const subjects = summary?.subjects;
   const total = subjects?.reduce((a, s) => a + s.total, 0) ?? 0;
-  const dueAll = subjects?.reduce((a, s) => a + s.due, 0) ?? 0;
-  const newAll = summary?.newAll ?? 0;   // 新規の上限は全科目で共通
   const changeNewPerDay = (n: number) => { setNewPerDay(n); setNpd(n); };
 
   return (
@@ -133,21 +128,6 @@ export default function Home() {
         </div>
       )}
 
-      {total > 0 && (
-        <div className="panel today">
-          <div>
-            <h2>今日の復習</h2>
-            <div className="today-nums">
-              <div><b>{dueAll}</b><span>復習</span></div>
-              <div><b>{newAll}</b><span>新しい問題</span></div>
-            </div>
-          </div>
-          {dueAll + newAll > 0
-            ? <button className="primary big-btn" onClick={() => go(`/practice?n=${count}`)}>今日の復習を始める</button>
-            : <div className="done-today"><p>今日の分は終わりました 🎉</p><button onClick={() => go(`/practice?n=${count}&mode=extra`)}>もっと解く（先取り）</button></div>}
-        </div>
-      )}
-
       <section className="subjects">
         {subjects?.map((s) => (
           <div key={s.subject} className="panel subject">
@@ -157,14 +137,19 @@ export default function Home() {
             </div>
             <div className="subject-stats">
               <div><b>{s.due}</b><span>今日の復習</span></div>
+              <div><b>{s.newToday}</b><span>新しい問題</span></div>
               <div><b>{s.tried}<small>/{s.total}</small></b><span>学習済み</span></div>
               <div><b>{s.retention == null ? '—' : `${Math.round(s.retention * 100)}%`}</b><span>定着度</span></div>
               <div><b>{s.rate == null ? '—' : `${Math.round(s.rate * 100)}%`}</b><span>正答率</span></div>
             </div>
             <div className="subject-btns">
-              <button className="primary" disabled={!s.total} onClick={() => go(`/practice?subject=${s.subject}&n=${count}`)}>
-                {s.subject}の復習
-              </button>
+              {s.due + s.newToday > 0 || !s.total
+                ? <button className="primary" disabled={!s.total} onClick={() => go(`/practice?subject=${s.subject}&n=${count}`)}>
+                    {s.subject}の今日の学習 {s.due + s.newToday}
+                  </button>
+                : <button onClick={() => go(`/practice?subject=${s.subject}&n=${count}&mode=extra`)}>
+                    今日の分は終わり 🎉　もっと解く
+                  </button>}
               {s.calcTotal > 0 && (
                 <button onClick={() => go(`/practice?subject=${s.subject}&n=${count}&kind=calc${s.calcDue ? '' : '&mode=extra'}`)}>
                   計算問題 {s.calcDue}<small>/{s.calcTotal}</small>
@@ -185,7 +170,7 @@ export default function Home() {
           </div>
         </div>
         <div className="row">
-          <span>1日に新しく解く問題</span>
+          <span>1日に新しく解く問題（科目ごと）</span>
           <div className="seg">
             {[5, 10, 20, 30].map((n) => (
               <button key={n} className={n === newPerDay ? 'on' : ''} onClick={() => changeNewPerDay(n)}>{n}問</button>

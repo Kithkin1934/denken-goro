@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { unzipSync, strFromU8 } from 'fflate';
 import type { Card, PackManifest, Report } from './types';
-import { endOfToday, examSortKeyOf, getNewPerDay, ratingFor, retrievability, review, startOfToday, type RatingName, type SrsState } from './srs';
+import { endOfToday, examSortKeyOf, getNewPerDay, isDueNow, ratingFor, retrievability, review, startOfToday, type RatingName, type SrsState } from './srs';
 
 export interface ImageRow { path: string; blob: Blob }
 
@@ -140,10 +140,10 @@ export async function setGoroRecalled(cardId: string, at: number, recalled: bool
   });
 }
 
-/** 今日すでに新しく解き始めた問題の数（計算問題は数えない） */
-async function newStartedToday(calc: Set<string>): Promise<number> {
+/** 今日その科目で新しく解き始めた問題の数（計算問題は数えない） */
+export function newStartedToday(stats: CardStat[], calc: Set<string>, subject: string): number {
   const start = startOfToday();
-  return (await db.stats.toArray()).filter((s) => (s.firstAt ?? 0) >= start && !calc.has(s.cardId)).length;
+  return stats.filter((s) => (s.firstAt ?? 0) >= start && !calc.has(s.cardId) && s.cardId.startsWith(`${subject}-`)).length;
 }
 
 /**
@@ -156,7 +156,8 @@ export async function buildQueue(subject: string | null, max: number, mode: 'tod
   const calc = await calcIds();
   const all = subject ? await db.cards.where({ subject }).toArray() : await db.cards.toArray();
   const cards = all.filter((c) => calc.has(c.id) === (kind === 'calc'));
-  const stats = new Map((await db.stats.toArray()).map((s) => [s.cardId, s]));
+  const statList = await db.stats.toArray();
+  const stats = new Map(statList.map((s) => [s.cardId, s]));
   const now = Date.now(), end = endOfToday();
   // 新しい問題は、新しい回から順に（本番に近い傾向から覚える）。同じ回の中は問番号順
   const fresh = cards.filter((c) => !stats.get(c.id)?.srs)
@@ -165,9 +166,11 @@ export async function buildQueue(subject: string | null, max: number, mode: 'tod
     .map((c) => ({ c, s: stats.get(c.id)!.srs!, r: retrievability(stats.get(c.id)!.srs, now) }));
 
   if (mode === 'today') {
-    const due = seen.filter((x) => x.s.due <= end).sort((a, b) => a.r - b.r).map((x) => x.c);
-    // 計算問題は自分で選んだ少数なので、新しい問題の1日の上限をかけない
-    const newLeft = kind === 'calc' ? Infinity : Math.max(0, getNewPerDay() - (await newStartedToday(calc)));
+    const due = seen.filter((x) => isDueNow(x.s, now)).sort((a, b) => a.r - b.r).map((x) => x.c);
+    // 新しい問題の1日の上限は科目ごと。計算問題は自分で選んだ少数なので上限をかけない
+    const newLeft = kind === 'calc' ? Infinity
+      : subject ? Math.max(0, getNewPerDay() - newStartedToday(statList, calc, subject))
+      : 0;
     const take = due.slice(0, max);
     return [...take, ...fresh.slice(0, Math.min(newLeft, max - take.length))];
   }
