@@ -184,6 +184,7 @@ export default function Home() {
 
       <div className="panel row">
         <button disabled={!total} onClick={() => go('/browse')}>問題一覧</button>
+        <button disabled={!total} onClick={() => go('/exam')}>模擬試験{localStorage.getItem('mockExam') ? '（途中）' : ''}</button>
         <button onClick={() => go('/stats')}>学習の記録</button>
         <button onClick={() => fileRef.current?.click()}>問題データを読み込む</button>
         <input ref={fileRef} type="file" accept=".zip,application/zip" multiple hidden onChange={(e) => onFiles(e.target.files)} />

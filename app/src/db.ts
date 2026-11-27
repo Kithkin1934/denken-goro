@@ -232,9 +232,9 @@ export async function sendReports(): Promise<number | null> {
 }
 
 // ---- 学習記録のバックアップ ----
-interface Backup { app: 'denken-goro'; version: 1; exportedAt: string; reviews: ReviewLog[]; stats: CardStat[]; reports: Report[]; tags?: CardTag[] }
+interface Backup { app: 'denken-goro'; version: 1; exportedAt: string; reviews: ReviewLog[]; stats: CardStat[]; reports: Report[]; tags?: CardTag[]; mockExams?: { at: number }[] }
 
-/** 学習記録（解答記録・学習状態・報告・計算問題の印）を JSON ファイルにする。問題データは含めない */
+/** 学習記録（解答記録・学習状態・報告・計算問題の印・模擬試験の結果）を JSON ファイルにする。問題データは含めない */
 export async function exportBackup(): Promise<{ blob: Blob; fileName: string; reviews: number }> {
   const data: Backup = {
     app: 'denken-goro', version: 1, exportedAt: new Date().toISOString(),
@@ -242,6 +242,7 @@ export async function exportBackup(): Promise<{ blob: Blob; fileName: string; re
     stats: await db.stats.toArray(),
     reports: await db.reports.toArray(),
     tags: await db.tags.toArray(),
+    mockExams: JSON.parse(localStorage.getItem('mockExamHistory') ?? '[]'),
   };
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -266,6 +267,13 @@ export async function importBackup(file: File) {
     const tags = new Map((await db.tags.toArray()).map((t) => [t.cardId, t]));
     await db.tags.bulkPut((data.tags ?? []).filter((t) => (tags.get(t.cardId)?.at ?? -1) < t.at));
   });
+  // 模擬試験の結果（同じ日時のものは重ねない）
+  if (data.mockExams?.length) {
+    const cur: { at: number }[] = JSON.parse(localStorage.getItem('mockExamHistory') ?? '[]');
+    const have = new Set(cur.map((h) => h.at));
+    const merged = [...cur, ...data.mockExams.filter((h) => !have.has(h.at))].sort((a, b) => a.at - b.at);
+    localStorage.setItem('mockExamHistory', JSON.stringify(merged));
+  }
   return { added, stats: data.stats.length };
 }
 

@@ -118,6 +118,8 @@ pre { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8p
   .practice .choices:not(.multi) { grid-template-columns: 1fr; }
   .practice .choices.multi .choice { min-height: 52px; font-size: 18px; }
   .practice .reveal { grid-area: rev; }
+  .exam-run { grid-template-areas: "top top" "nav nav" "img ans"; }
+  .exam-run .exam-nav { grid-area: nav; }
 }
 
 /* 報告 */
@@ -205,3 +207,27 @@ pre { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8p
 .table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
 .table th, .table td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line); }
 .table th:first-child, .table td:first-child { text-align: left; }
+
+/* 模擬試験 */
+.exam-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.exam-list button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; }
+.exam-list button.on { border-color: var(--accent); background: #eef2fd; }
+.exam-list span { font-size: 12px; color: var(--muted); }
+.pass { color: var(--ok) !important; font-weight: 600; }
+.fail { color: var(--ng) !important; font-weight: 600; }
+.timer { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 18px; }
+.timer.low { color: var(--ng); }
+.exam-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; grid-column: 1 / -1; }
+.exam-nav button { min-width: 40px; min-height: 36px; padding: 2px 6px; font-size: 14px; }
+.exam-nav button.done { background: #eef2fd; border-color: #b9c7f1; }
+.exam-nav button.some { background: #fff8e6; border-color: #f0d79a; }
+.exam-nav button.cur { outline: 2px solid var(--accent); outline-offset: 1px; font-weight: 700; }
+.exam-move { margin-top: 14px; justify-content: space-between; }
+button.danger { color: var(--ng); }
+.result-sum.pass .big { color: var(--ok); }
+.result-sum.fail .big { color: var(--ng); }
+.result-sum .big small { font-size: 20px; }
+.verdict-line { font-weight: 600; margin: 4px 0 8px; }
+.link-btn { border: none; background: none; padding: 6px 0; text-align: left; font: inherit; width: 100%; }
+.exam-review li { border-bottom: 1px solid var(--line); }
+.exam-goro { padding: 8px 0 12px; }
