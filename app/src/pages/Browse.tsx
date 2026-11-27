@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { db, calcIds } from '../db';
 import { SUBJECTS, examSortKey, type Subject } from '../types';
 import { go } from '../App';
 import { dueLabel } from '../srs';
@@ -10,13 +10,14 @@ export default function Browse() {
   const data = useLiveQuery(async () => {
     const cards = await db.cards.where({ subject }).toArray();
     const stats = new Map((await db.stats.toArray()).map((s) => [s.cardId, s]));
+    const calc = await calcIds();
     const byExam = new Map<string, typeof cards>();
     for (const c of cards) byExam.set(c.exam, [...(byExam.get(c.exam) ?? []), c]);
     return [...byExam.entries()]
       .sort((a, b) => examSortKey(b[0]) - examSortKey(a[0]))
       .map(([exam, cs]) => ({
         exam,
-        cards: cs.sort((a, b) => a.number - b.number || (a.sub ?? '').localeCompare(b.sub ?? '')).map((c) => ({ c, s: stats.get(c.id) })),
+        cards: cs.sort((a, b) => a.number - b.number || (a.sub ?? '').localeCompare(b.sub ?? '')).map((c) => ({ c, s: stats.get(c.id), calc: calc.has(c.id) })),
       }));
   }, [subject]);
 
@@ -34,13 +35,13 @@ export default function Browse() {
         <div key={exam} className="panel">
           <h2>{subject} {exam}</h2>
           <div className="qgrid">
-            {cards.map(({ c, s }) => {
+            {cards.map(({ c, s, calc }) => {
               const cls = !s ? '' : s.lastCorrect ? 'ok' : 'ng';
               const rate = s ? `${Math.round((s.corrects / s.attempts) * 100)}%` : '';
               const next = s?.srs ? dueLabel(s.srs.due) : '';
               return (
                 <button key={c.id} className={`qcell ${cls}`} onClick={() => go(`/card/${encodeURIComponent(c.id)}`)}>
-                  <b>{c.number}{c.sub ?? ''}</b><span>{rate}</span>{next && <span className="next">{next}</span>}
+                  {calc && <span className="calc-mark">計</span>}<b>{c.number}{c.sub ?? ''}</b><span>{rate}</span>{next && <span className="next">{next}</span>}
                 </button>
               );
             })}

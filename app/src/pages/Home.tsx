@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, exportBackup, importBackup, importPackage, sendReports } from '../db';
+import { db, calcIds, exportBackup, importBackup, importPackage, sendReports } from '../db';
 import { SUBJECTS } from '../types';
 import { endOfToday, getNewPerDay, retrievability, setNewPerDay, startOfToday } from '../srs';
 import { go } from '../App';
@@ -18,23 +18,27 @@ export default function Home() {
     const cards = await db.cards.toArray();
     const statList = await db.stats.toArray();
     const stats = new Map(statList.map((s) => [s.cardId, s]));
+    const calc = await calcIds();
     const now = Date.now(), end = endOfToday();
-    const startedToday = statList.filter((s) => (s.firstAt ?? 0) >= startOfToday()).length;
+    const startedToday = statList.filter((s) => (s.firstAt ?? 0) >= startOfToday() && !calc.has(s.cardId)).length;
     const newLeftAll = Math.max(0, newPerDay - startedToday);
     let freshAll = 0;
     const subjects = SUBJECTS.map((subject) => {
       const cs = cards.filter((c) => c.subject === subject);
-      let tried = 0, attempts = 0, corrects = 0, due = 0, fresh = 0, rSum = 0;
+      let tried = 0, attempts = 0, corrects = 0, due = 0, fresh = 0, rSum = 0, calcTotal = 0, calcDue = 0;
       for (const c of cs) {
         const s = stats.get(c.id);
-        if (!s?.srs) { fresh++; freshAll++; continue; }
+        const isCalc = calc.has(c.id);
+        if (isCalc) { calcTotal++; if (!s?.srs || s.srs.due <= end) calcDue++; }
+        if (!s?.srs) { if (!isCalc) { fresh++; freshAll++; } continue; }
         tried++; attempts += s.attempts; corrects += s.corrects;
-        if (s.srs.due <= end) due++;
+        if (s.srs.due <= end && !isCalc) due++;
         rSum += retrievability(s.srs, now);
       }
       return {
         subject, total: cs.length, exams: new Set(cs.map((c) => c.exam)).size, tried, due,
         newToday: Math.min(fresh, newLeftAll),
+        calcTotal, calcDue,   // 計算問題（語呂の復習とは別枠）
         rate: attempts ? corrects / attempts : null,
         retention: tried ? rSum / tried : null,   // 解いたことのある問題の、今の平均の思い出せる確率
       };
@@ -157,9 +161,16 @@ export default function Home() {
               <div><b>{s.retention == null ? '—' : `${Math.round(s.retention * 100)}%`}</b><span>定着度</span></div>
               <div><b>{s.rate == null ? '—' : `${Math.round(s.rate * 100)}%`}</b><span>正答率</span></div>
             </div>
-            <button className="primary" disabled={!s.total} onClick={() => go(`/practice?subject=${s.subject}&n=${count}`)}>
-              {s.subject}の復習
-            </button>
+            <div className="subject-btns">
+              <button className="primary" disabled={!s.total} onClick={() => go(`/practice?subject=${s.subject}&n=${count}`)}>
+                {s.subject}の復習
+              </button>
+              {s.calcTotal > 0 && (
+                <button onClick={() => go(`/practice?subject=${s.subject}&n=${count}&kind=calc${s.calcDue ? '' : '&mode=extra'}`)}>
+                  計算問題 {s.calcDue}<small>/{s.calcTotal}</small>
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </section>

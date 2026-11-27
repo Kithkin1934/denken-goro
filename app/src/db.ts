@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { unzipSync, strFromU8 } from 'fflate';
 import type { Card, PackManifest, Report } from './types';
-import { endOfToday, examSortKeyOf, getNewPerDay, isLearning, ratingFor, retrievability, review, startOfToday, type RatingName, type SrsState } from './srs';
+import { endOfToday, examSortKeyOf, getNewPerDay, ratingFor, retrievability, review, startOfToday, type RatingName, type SrsState } from './srs';
 
 export interface ImageRow { path: string; blob: Blob }
 
@@ -30,12 +30,17 @@ export interface CardStat {
   due?: number;        // 次に出す日時（srs.due と同じ。検索用）
 }
 
+/** 問題の種類の印（計算問題として解くか）。問題データを読み込み直しても残る */
+export interface CardTag { cardId: string; calc: boolean; at: number }
+export type Kind = 'goro' | 'calc';
+
 export const db = new Dexie('denken-goro') as Dexie & {
   cards: EntityTable<Card, 'id'>;
   images: EntityTable<ImageRow, 'path'>;
   reviews: EntityTable<ReviewLog, 'id'>;
   stats: EntityTable<CardStat, 'cardId'>;
   reports: EntityTable<Report, 'id'>;
+  tags: EntityTable<CardTag, 'cardId'>;
 };
 
 db.version(1).stores({
@@ -47,6 +52,18 @@ db.version(1).stores({
 db.version(2).stores({ reports: 'id, cardId, at' });
 // v3: FSRS を導入。これまでの解答記録を順に当てはめて、問題ごとの状態を作る
 db.version(3).stores({ stats: 'cardId, lastAt, due' }).upgrade((tx) => migrateToFsrs(tx));
+// v4: 計算問題の印
+db.version(4).stores({ tags: 'cardId' });
+
+/** 計算問題に移した問題の id */
+export async function calcIds(): Promise<Set<string>> {
+  return new Set((await db.tags.toArray()).filter((t) => t.calc).map((t) => t.cardId));
+}
+
+/** 計算問題へ移す／語呂へ戻す */
+export async function setCalc(cardId: string, calc: boolean) {
+  await db.tags.put({ cardId, calc, at: Date.now() });
+}
 
 export async function migrateToFsrs(tx: { table: (name: string) => Dexie.Table }) {
   const logs = (await tx.table('reviews').toArray()) as ReviewLog[];
@@ -123,36 +140,22 @@ export async function setGoroRecalled(cardId: string, at: number, recalled: bool
   });
 }
 
-export interface TodayCounts { due: number; learning: number; newAvailable: number; newLeft: number }
-
-/** 今日すでに新しく解き始めた問題の数 */
-async function newStartedToday(): Promise<number> {
+/** 今日すでに新しく解き始めた問題の数（計算問題は数えない） */
+async function newStartedToday(calc: Set<string>): Promise<number> {
   const start = startOfToday();
-  return (await db.stats.toArray()).filter((s) => (s.firstAt ?? 0) >= start).length;
-}
-
-/** 今日の復習の件数（科目ごと） */
-export async function todayCounts(subject: string | null): Promise<TodayCounts> {
-  const cards = subject ? await db.cards.where({ subject }).toArray() : await db.cards.toArray();
-  const stats = new Map((await db.stats.toArray()).map((s) => [s.cardId, s]));
-  const end = endOfToday();
-  let due = 0, learning = 0, newAvailable = 0;
-  for (const c of cards) {
-    const s = stats.get(c.id);
-    if (!s?.srs) newAvailable++;
-    else if (s.srs.due <= end) { due++; if (isLearning(s.srs)) learning++; }
-  }
-  const newLeft = Math.max(0, getNewPerDay() - (await newStartedToday()));
-  return { due, learning, newAvailable, newLeft: Math.min(newLeft, newAvailable) };
+  return (await db.stats.toArray()).filter((s) => (s.firstAt ?? 0) >= start && !calc.has(s.cardId)).length;
 }
 
 /**
  * 出題する問題を選ぶ
  * - today: 今日が期限の問題（思い出せる確率が低い順）＋ 新しい問題（1日の上限まで）
+ * - kind: goro は語呂の問題だけ、calc は計算問題に移した問題だけ
  * - extra: 今日の分が終わったあとの追加。新しい問題と、思い出せる確率が低い問題から
  */
-export async function buildQueue(subject: string | null, max: number, mode: 'today' | 'extra'): Promise<Card[]> {
-  const cards = subject ? await db.cards.where({ subject }).toArray() : await db.cards.toArray();
+export async function buildQueue(subject: string | null, max: number, mode: 'today' | 'extra', kind: Kind = 'goro'): Promise<Card[]> {
+  const calc = await calcIds();
+  const all = subject ? await db.cards.where({ subject }).toArray() : await db.cards.toArray();
+  const cards = all.filter((c) => calc.has(c.id) === (kind === 'calc'));
   const stats = new Map((await db.stats.toArray()).map((s) => [s.cardId, s]));
   const now = Date.now(), end = endOfToday();
   // 新しい問題は、新しい回から順に（本番に近い傾向から覚える）。同じ回の中は問番号順
@@ -163,7 +166,8 @@ export async function buildQueue(subject: string | null, max: number, mode: 'tod
 
   if (mode === 'today') {
     const due = seen.filter((x) => x.s.due <= end).sort((a, b) => a.r - b.r).map((x) => x.c);
-    const newLeft = Math.max(0, getNewPerDay() - (await newStartedToday()));
+    // 計算問題は自分で選んだ少数なので、新しい問題の1日の上限をかけない
+    const newLeft = kind === 'calc' ? Infinity : Math.max(0, getNewPerDay() - (await newStartedToday(calc)));
     const take = due.slice(0, max);
     return [...take, ...fresh.slice(0, Math.min(newLeft, max - take.length))];
   }
@@ -215,15 +219,16 @@ export async function sendReports(): Promise<number | null> {
 }
 
 // ---- 学習記録のバックアップ ----
-interface Backup { app: 'denken-goro'; version: 1; exportedAt: string; reviews: ReviewLog[]; stats: CardStat[]; reports: Report[] }
+interface Backup { app: 'denken-goro'; version: 1; exportedAt: string; reviews: ReviewLog[]; stats: CardStat[]; reports: Report[]; tags?: CardTag[] }
 
-/** 学習記録（解答記録・学習状態・報告）を JSON ファイルにする。問題データは含めない */
+/** 学習記録（解答記録・学習状態・報告・計算問題の印）を JSON ファイルにする。問題データは含めない */
 export async function exportBackup(): Promise<{ blob: Blob; fileName: string; reviews: number }> {
   const data: Backup = {
     app: 'denken-goro', version: 1, exportedAt: new Date().toISOString(),
     reviews: (await db.reviews.toArray()).map(({ id: _id, ...r }) => r as ReviewLog),
     stats: await db.stats.toArray(),
     reports: await db.reports.toArray(),
+    tags: await db.tags.toArray(),
   };
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -236,7 +241,7 @@ export async function importBackup(file: File) {
   const data = JSON.parse(await file.text()) as Backup;
   if (data.app !== 'denken-goro' || data.version !== 1) throw new Error('電験語呂のバックアップファイルではありません');
   let added = 0;
-  await db.transaction('rw', db.reviews, db.stats, db.reports, async () => {
+  await db.transaction('rw', [db.reviews, db.stats, db.reports, db.tags], async () => {
     const have = new Set((await db.reviews.toArray()).map((r) => `${r.cardId}@${r.at}`));
     const fresh = data.reviews.filter((r) => !have.has(`${r.cardId}@${r.at}`));
     added = fresh.length;
@@ -244,6 +249,9 @@ export async function importBackup(file: File) {
     const cur = new Map((await db.stats.toArray()).map((s) => [s.cardId, s]));
     await db.stats.bulkPut(data.stats.filter((s) => (cur.get(s.cardId)?.lastAt ?? -1) < s.lastAt));
     await db.reports.bulkPut(data.reports.filter((r) => r.id));
+    // 計算問題の印は、あとで付けた方を残す
+    const tags = new Map((await db.tags.toArray()).map((t) => [t.cardId, t]));
+    await db.tags.bulkPut((data.tags ?? []).filter((t) => (tags.get(t.cardId)?.at ?? -1) < t.at));
   });
   return { added, stats: data.stats.length };
 }

@@ -58,6 +58,15 @@ export function ratingFor(correct: boolean, recalled: boolean | null, durationMs
   return 'good';
 }
 
+/**
+ * 計算問題の評価（語呂も即答判定も使わない）
+ * - 不正解 → Again ／ 正解だが自信なし → Hard ／ 計算で解けた → Good
+ */
+export function ratingForCalc(correct: boolean, confident: boolean | null): RatingName {
+  if (!correct) return 'again';
+  return confident === false ? 'hard' : 'good';
+}
+
 /** 評価を反映した新しい状態 */
 export function review(prev: SrsState | undefined, rating: RatingName, at: number): SrsState {
   const card = prev ? toFsrs(prev) : createEmptyCard(new Date(at));
