@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, calcIds, exportBackup, importBackup, importPackage, newStartedToday, sendReports } from '../db';
+import { db, calcIds, studyStreak, exportBackup, importBackup, importPackage, newStartedToday, sendReports } from '../db';
 import { SUBJECTS } from '../types';
 import { getNewPerDay, isDueNow, retrievability, setNewPerDay } from '../srs';
 import { go } from '../App';
@@ -46,7 +46,7 @@ export default function Home() {
   const today = useLiveQuery(async () => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const logs = await db.reviews.where('at').aboveOrEqual(start.getTime()).toArray();
-    return { n: logs.length, ok: logs.filter((l) => l.correct).length };
+    return { n: logs.length, ok: logs.filter((l) => l.correct).length, streak: await studyStreak() };
   }, []);
 
   // 問題データ（zip）を読み込む。科目ごとの複数ファイルをまとめて選べる
@@ -120,6 +120,7 @@ export default function Home() {
       <header className="top">
         <h1>電験語呂</h1>
         {today && <span className="muted">今日 {today.n}問・正解 {today.ok}</span>}
+        {!!today?.streak.days && <button className="streak" onClick={() => go('/stats')}>🔥 {today.streak.days}日連続</button>}
       </header>
 
       {total === 0 && subjects && (
@@ -183,6 +184,7 @@ export default function Home() {
 
       <div className="panel row">
         <button disabled={!total} onClick={() => go('/browse')}>問題一覧</button>
+        <button onClick={() => go('/stats')}>学習の記録</button>
         <button onClick={() => fileRef.current?.click()}>問題データを読み込む</button>
         <input ref={fileRef} type="file" accept=".zip,application/zip" multiple hidden onChange={(e) => onFiles(e.target.files)} />
         {import.meta.env.DEV && <button onClick={loadFromMac}>Mac から直接読み込む</button>}

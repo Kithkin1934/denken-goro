@@ -284,3 +284,39 @@ export async function groupCards(cards: Card[]): Promise<Card[][]> {
   }
   return groups;
 }
+
+// ---- 学習の記録（グラフ・連続日数） ----
+const dayKey = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+/** 1問にかかった時間は最大5分まで数える（開いたまま放置した分を入れない） */
+const MAX_COUNT_MS = 5 * 60 * 1000;
+
+export interface DayStat { key: string; label: string; n: number; ok: number; ms: number }
+
+/** 直近 days 日の、日ごとの解いた数・正解数・勉強時間 */
+export async function dailyStats(days: number): Promise<DayStat[]> {
+  const start = startOfToday() - (days - 1) * 86400000;
+  const logs = await db.reviews.where('at').aboveOrEqual(start).toArray();
+  const map = new Map<string, DayStat>();
+  for (let i = 0; i < days; i++) {
+    const t = start + i * 86400000 + 12 * 3600000;   // 夏時間などでずれないよう昼で数える
+    const d = new Date(t);
+    map.set(dayKey(t), { key: dayKey(t), label: `${d.getMonth() + 1}/${d.getDate()}`, n: 0, ok: 0, ms: 0 });
+  }
+  for (const l of logs) {
+    const s = map.get(dayKey(l.at));
+    if (!s) continue;
+    s.n++; if (l.correct) s.ok++;
+    s.ms += Math.min(MAX_COUNT_MS, Math.max(0, l.durationMs || 0));
+  }
+  return [...map.values()];
+}
+
+/** 連続学習日数。今日まだ解いていなければ、昨日までの連続を数える */
+export async function studyStreak(): Promise<{ days: number; today: boolean }> {
+  const keys = new Set((await db.reviews.orderBy('at').keys()).map((t) => dayKey(t as number)));
+  const today = keys.has(dayKey(Date.now()));
+  let days = 0;
+  let t = Date.now() - (today ? 0 : 86400000);
+  while (keys.has(dayKey(t))) { days++; t -= 86400000; }
+  return { days, today };
+}
